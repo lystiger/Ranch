@@ -1,6 +1,6 @@
 import time
 import uuid
-from .providers.base import ProviderResponse, BaseProvider
+from .base import ProviderResponse, BaseProvider
 
 class MockProvider(BaseProvider):
     def run(self, prompt: str) -> ProviderResponse:

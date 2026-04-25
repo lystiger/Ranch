@@ -61,8 +61,19 @@ class Runner:
     def update_metrics(self, agent: Agent, run: Run):
         metrics = agent.metrics
         if not metrics:
-            metrics = Metrics(agent_id=agent.id)
+            metrics = Metrics(
+                agent_id=agent.id,
+                total_tokens=0,
+                avg_latency=0.0,
+                success_rate=0.0,
+                performance_score=0.0
+            )
             self.db.add(metrics)
+            agent.metrics = metrics
+        
+        # Ensure values are not None (in case they were partially initialized)
+        if metrics.total_tokens is None: metrics.total_tokens = 0
+        if metrics.avg_latency is None: metrics.avg_latency = 0.0
         
         # Incremental average for latency
         all_runs = agent.runs + [run]

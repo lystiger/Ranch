@@ -145,7 +145,7 @@ def status():
         
         for agent in agents:
             metrics = agent.metrics
-            latency = f"{metrics.avg_latency:.2s}s" if metrics and metrics.avg_latency else "N/A"
+            latency = f"{metrics.avg_latency:.2f}s" if metrics and metrics.avg_latency else "N/A"
             tokens = f"{metrics.total_tokens}" if metrics else "0"
             
             # Simplified cookie/energy representation
