@@ -68,6 +68,16 @@ def compare(
         console.print(table)
 
 @app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Host to bind the server to"),
+    port: int = typer.Option(8000, help="Port to bind the server to")
+):
+    """Start the LLM Farm API server."""
+    import uvicorn
+    console.print(f"[bold green]Starting LLM Farm API on http://{host}:{port}[/bold green]")
+    uvicorn.run("farm.api:app", host=host, port=port, reload=True)
+
+@app.command()
 def add(
     id: str = typer.Argument(..., help="Unique ID for the agent (e.g., 'kimi-1')"),
     name: str = typer.Argument(..., help="Display name for the agent"),

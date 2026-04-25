@@ -3,14 +3,16 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from .models import Agent, Run, Metrics
 from .providers.mock import MockProvider
-# We will import other providers here later
+from .providers.gemini import GeminiProvider
+from .providers.codex import CodexProvider
 
 def get_provider(provider_name: str):
     """Factory to get the provider implementation."""
     providers = {
         "mock": MockProvider,
+        "gemini": GeminiProvider,
+        "codex": CodexProvider,
         # "ollama": OllamaProvider,
-        # "gemini": GeminiProvider,
     }
     provider_class = providers.get(provider_name, MockProvider)
     return provider_class()
