@@ -5,6 +5,7 @@ from .models import Agent, Run, Metrics
 from .providers.mock import MockProvider
 from .providers.gemini import GeminiProvider
 from .providers.codex import CodexProvider
+from .providers.kimi import KimiProvider
 
 def get_provider(provider_name: str):
     """Factory to get the provider implementation."""
@@ -12,6 +13,7 @@ def get_provider(provider_name: str):
         "mock": MockProvider,
         "gemini": GeminiProvider,
         "codex": CodexProvider,
+        "kimi": KimiProvider,
         # "ollama": OllamaProvider,
     }
     provider_class = providers.get(provider_name, MockProvider)
@@ -20,6 +22,25 @@ def get_provider(provider_name: str):
 class Runner:
     def __init__(self, db: Session):
         self.db = db
+
+    def recover_energy(self, agent: Agent):
+        """Passive energy recovery: 5% per hour since last run."""
+        if agent.energy >= 100:
+            return
+
+        last_run = self.db.query(Run).filter(Run.agent_id == agent.id).order_by(Run.timestamp.desc()).first()
+        if not last_run:
+            # If never run, just fill it
+            agent.energy = 100
+            return
+
+        now = datetime.utcnow()
+        elapsed = now - last_run.timestamp
+        hours = elapsed.total_seconds() / 3600
+        
+        recovery = int(hours * 5)  # 5% per hour
+        if recovery > 0:
+            agent.energy = min(100, agent.energy + recovery)
 
     def run_agent(self, agent_id: str, prompt: str) -> Run:
         agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
@@ -82,9 +103,8 @@ class Runner:
         total_runs = len(all_runs)
         
         metrics.total_tokens += (run.tokens_input + run.tokens_output)
-        metrics.avg_latency = sum(r.latency for r in all_runs) / total_runs
-        metrics.success_rate = sum(1 for r in all_runs if r.success) / total_runs
+        metrics.avg_latency = round(sum(r.latency for r in all_runs) / total_runs, 3)
+        metrics.success_rate = round(sum(1 for r in all_runs if r.success) / total_runs, 3)
         
         # Basic performance score (quality - latency penalty)
-        # Higher is better
-        metrics.performance_score = 10.0 - (metrics.avg_latency * 2)
+        metrics.performance_score = round(10.0 - (metrics.avg_latency * 2), 3)

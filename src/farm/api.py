@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 from sqlalchemy.orm import Session
 from .database import SessionLocal, init_db
 from .models import Agent, Run, Metrics
@@ -43,21 +44,30 @@ class MetricsBase(BaseModel):
     success_rate: float
     performance_score: float
 
-class AgentDetail(AgentBase):
-    metrics: Optional[MetricsBase]
-
-class RunRequest(BaseModel):
-    agent_id: str
-    prompt: str
-
 class RunResponse(BaseModel):
     id: str
     agent_id: str
+    prompt: str
     response: str
     tokens_input: int
     tokens_output: int
     latency: float
     success: bool
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+class AgentDetail(AgentBase):
+    metrics: Optional[MetricsBase]
+    runs: List[RunResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class RunRequest(BaseModel):
+    agent_id: str
+    prompt: str
 
 class CompareRequest(BaseModel):
     prompt: str
@@ -75,6 +85,10 @@ def startup():
 @app.get("/agents", response_model=List[AgentDetail])
 def get_agents(db: Session = Depends(get_db)):
     agents = db.query(Agent).all()
+    runner = Runner(db)
+    for agent in agents:
+        runner.recover_energy(agent)
+    db.commit()
     return agents
 
 @app.get("/agents/{agent_id}", response_model=AgentDetail)
@@ -82,6 +96,10 @@ def get_agent(agent_id: str, db: Session = Depends(get_db)):
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    
+    runner = Runner(db)
+    runner.recover_energy(agent)
+    db.commit()
     return agent
 
 @app.post("/run", response_model=RunResponse)

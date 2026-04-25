@@ -16,14 +16,39 @@ import { runQuery } from "./queries/rawSql";
 export const llmFarmRouter = createRouter({
   agents: createRouter({
     list: publicQuery.query(async () => {
-      return findAgents();
+      const response = await fetch("http://localhost:8000/agents");
+      if (!response.ok) throw new Error("Failed to fetch agents from backend");
+      const agents = await response.json();
+      // Map backend fields to frontend expected fields
+      return agents.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        provider: a.provider,
+        status: a.is_dirty ? "degraded" : "online",
+        tokensUsed: a.metrics?.total_tokens || 0,
+        tokensLimit: a.token_limit,
+        latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
+        performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
+        cookies: a.cookies,
+      }));
     }),
     byId: publicQuery
       .input(z.object({ id: z.string() }))
       .query(async ({ input }) => {
-        const agent = await findAgentById(input.id);
-        if (!agent) throw new Error("Agent not found");
-        return agent;
+        const response = await fetch(`http://localhost:8000/agents/${input.id}`);
+        if (!response.ok) throw new Error("Agent not found in backend");
+        const a = await response.json();
+        return {
+          id: a.id,
+          name: a.name,
+          provider: a.provider,
+          status: a.is_dirty ? "degraded" : "online",
+          tokensUsed: a.metrics?.total_tokens || 0,
+          tokensLimit: a.token_limit,
+          latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
+          performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
+          cookies: a.cookies,
+        };
       }),
   }),
 
@@ -31,13 +56,43 @@ export const llmFarmRouter = createRouter({
     byAgent: publicQuery
       .input(z.object({ id: z.string() }))
       .query(async ({ input }) => {
-        const [agent, tokenUsage, latencyHistory, runHistory] = await Promise.all([
-          findAgentById(input.id),
-          getTokenUsage(input.id),
-          getLatencyHistory(input.id),
-          getRunHistory(input.id),
-        ]);
-        if (!agent) throw new Error("Agent not found");
+        const response = await fetch(`http://localhost:8000/agents/${input.id}`);
+        if (!response.ok) throw new Error("Agent not found in backend");
+        const a = await response.json();
+
+        // Transform data to frontend format
+        const agent = {
+          id: a.id,
+          name: a.name,
+          provider: a.provider,
+          status: a.is_dirty ? "degraded" : "online",
+          tokensUsed: a.metrics?.total_tokens || 0,
+          tokensLimit: a.token_limit,
+          latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
+          performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
+          cookies: a.cookies,
+        };
+
+        const runHistory = a.runs.map((r: any) => ({
+          id: r.id,
+          agentId: r.agent_id,
+          prompt: r.prompt,
+          output: r.response,
+          tokensUsed: r.tokens_input + r.tokens_output,
+          latency: r.latency,
+          timestamp: r.timestamp,
+        }));
+
+        const tokenUsage = runHistory.map((r: any) => ({
+          timestamp: r.timestamp,
+          tokens: r.tokensUsed,
+        }));
+
+        const latencyHistory = runHistory.map((r: any) => ({
+          timestamp: r.timestamp,
+          latency: r.latency,
+        }));
+
         return { agent, tokenUsage, latencyHistory, runHistory };
       }),
   }),
@@ -46,27 +101,21 @@ export const llmFarmRouter = createRouter({
     create: publicQuery
       .input(z.object({ agentId: z.string(), prompt: z.string().min(1) }))
       .mutation(async ({ input }) => {
-        const agent = await findAgentById(input.agentId);
-        if (!agent) throw new Error("Agent not found");
-
-        const latency = agent.latency + Math.floor(Math.random() * 100 - 50);
-        const tokensUsed = Math.floor(Math.random() * 3000 + 200);
-        const output = `Result for "${input.prompt}":\n\nGenerated output based on the provided prompt. The agent processed this in ${latency}ms using optimal token allocation.`;
-
-        const runId = await createRun({
-          agentId: input.agentId,
-          prompt: input.prompt,
-          output,
-          tokensUsed,
-          latency,
+        const response = await fetch("http://localhost:8000/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_id: input.agentId, prompt: input.prompt }),
         });
 
+        if (!response.ok) throw new Error("Backend run failed");
+        const data = await response.json();
+
         return {
-          id: runId,
-          agentId: input.agentId,
-          output,
-          tokensUsed,
-          latency,
+          id: data.id,
+          agentId: data.agent_id,
+          output: data.response,
+          tokensUsed: data.tokens_input + data.tokens_output,
+          latency: data.latency,
           timestamp: new Date().toISOString(),
         };
       }),

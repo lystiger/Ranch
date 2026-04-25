@@ -78,6 +78,16 @@ def serve(
     uvicorn.run("farm.api:app", host=host, port=port, reload=True)
 
 @app.command()
+def rest():
+    """Replenish energy for all agents in the farm (manual rest)."""
+    with SessionLocal() as db:
+        agents = db.query(Agent).all()
+        for agent in agents:
+            agent.energy = 100
+        db.commit()
+        console.print("[bold green]The herd has rested. All agents are at 100% energy![/bold green] 💤")
+
+@app.command()
 def add(
     id: str = typer.Argument(..., help="Unique ID for the agent (e.g., 'kimi-1')"),
     name: str = typer.Argument(..., help="Display name for the agent"),
@@ -155,7 +165,7 @@ def status():
         
         for agent in agents:
             metrics = agent.metrics
-            latency = f"{metrics.avg_latency:.2f}s" if metrics and metrics.avg_latency else "N/A"
+            latency = f"{metrics.avg_latency:.3f}s" if metrics and metrics.avg_latency else "N/A"
             tokens = f"{metrics.total_tokens}" if metrics else "0"
             
             # Simplified cookie/energy representation
