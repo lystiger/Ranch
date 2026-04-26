@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Activity, Clock, Cookie, Play, Star } from "lucide-react";
+import { ArrowLeft, Activity, Clock, Cookie, Play, Star, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TokenBar } from "@/components/TokenBar";
 import { PerformanceBadge } from "@/components/PerformanceBadge";
 import { LogsViewer } from "@/components/LogsViewer";
 import { trpc } from "@/providers/trpc";
 import type { Agent, RunResult } from "@/types";
+import { formatDateTime, formatTimeOnly } from "@/lib/utils/date";
 import {
   AreaChart,
   Area,
@@ -27,6 +29,7 @@ export default function AgentDetail() {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState("");
   const [lastRun, setLastRun] = useState<RunResult | null>(null);
+  const [selectedRun, setSelectedRun] = useState<RunResult | null>(null);
 
   const { data: metrics, isLoading } = trpc.llm.metrics.byAgent.useQuery(
     { id: id! },
@@ -99,7 +102,7 @@ export default function AgentDetail() {
         <PerformanceBadge score={agent.performanceScore} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 min-w-0">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
@@ -132,11 +135,11 @@ export default function AgentDetail() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Token Usage</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 overflow-hidden">
           <TokenBar used={agent.tokensUsed} limit={agent.tokensLimit} />
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
@@ -165,11 +168,11 @@ export default function AgentDetail() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Latency History</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-hidden">
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={metrics.latencyHistory}>
@@ -216,7 +219,7 @@ export default function AgentDetail() {
             <div className="rounded-md border bg-muted/40 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  {new Date(lastRun.timestamp).toLocaleString()}
+                  {formatDateTime(lastRun.timestamp)}
                 </span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((s) => (
@@ -254,21 +257,25 @@ export default function AgentDetail() {
           {metrics.runHistory.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">No runs yet</p>
           ) : (
-            <div className="space-y-2">
-              {metrics.runHistory.slice(0, 6).map((run, i) => (
+            <div className="space-y-2 max-w-full overflow-hidden">
+              {metrics.runHistory.slice(0, 10).map((run, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-muted/50 transition-colors group"
+                  onClick={() => setSelectedRun(run)}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-muted-foreground text-xs shrink-0">
-                      {run.timestamp ? new Date(run.timestamp).toLocaleTimeString() : "N/A"}
+                  <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
+                    <span className="text-muted-foreground text-xs shrink-0 font-mono">
+                      {formatTimeOnly(run.timestamp)}
                     </span>
-                    <span className="truncate">{run.output ?? run.prompt ?? "Run"}</span>
+                    <span className="truncate flex-1 text-foreground/80 group-hover:text-foreground">
+                      {run.prompt ? `${run.prompt.slice(0, 30)}... → ` : ""}{run.output}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0 ml-4">
-                    <span>{run.tokensUsed} tokens</span>
-                    <span>{run.latency}ms</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                    <span className="hidden sm:inline">{run.tokensUsed} tkn</span>
+                    <span className="hidden sm:inline">{run.latency}ms</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
               ))}
@@ -278,22 +285,61 @@ export default function AgentDetail() {
       </Card>
 
       <LogsViewer logs={[
-        `[${new Date().toISOString()}] [INFO] Agent initialized successfully`,
-        `[${new Date().toISOString()}] [INFO] Token budget refreshed`,
-        `[${new Date().toISOString()}] [DEBUG] Cache hit ratio: 0.87`,
-        `[${new Date().toISOString()}] [INFO] Processing request #48291`,
-        `[${new Date().toISOString()}] [WARN] High latency detected (650ms)`,
-        `[${new Date().toISOString()}] [INFO] Retrying with exponential backoff`,
-        `[${new Date().toISOString()}] [DEBUG] Context window: 14200 / 128000 tokens`,
-        `[${new Date().toISOString()}] [INFO] Request completed in 420ms`,
-        `[${new Date().toISOString()}] [INFO] Garbage collection triggered`,
-        `[${new Date().toISOString()}] [DEBUG] Memory usage: 2.4GB / 8GB`,
-        `[${new Date().toISOString()}] [INFO] New model weights loaded`,
-        `[${new Date().toISOString()}] [WARN] Token usage approaching limit (81%)`,
-        `[${new Date().toISOString()}] [INFO] Health check passed`,
-        `[${new Date().toISOString()}] [DEBUG] API latency p99: 320ms`,
-        `[${new Date().toISOString()}] [INFO] Scheduled maintenance in 24h`,
+        `[${formatDateTime(new Date())}] [INFO] Agent initialized successfully`,
+        `[${formatDateTime(new Date())}] [INFO] Token budget refreshed`,
+        `[${formatDateTime(new Date())}] [DEBUG] Cache hit ratio: 0.87`,
+        `[${formatDateTime(new Date())}] [INFO] Processing request #48291`,
+        `[${formatDateTime(new Date())}] [WARN] High latency detected (650ms)`,
+        `[${formatDateTime(new Date())}] [INFO] Retrying with exponential backoff`,
+        `[${formatDateTime(new Date())}] [DEBUG] Context window: 14200 / 128000 tokens`,
+        `[${formatDateTime(new Date())}] [INFO] Request completed in 420ms`,
+        `[${formatDateTime(new Date())}] [INFO] Garbage collection triggered`,
+        `[${formatDateTime(new Date())}] [DEBUG] Memory usage: 2.4GB / 8GB`,
+        `[${formatDateTime(new Date())}] [INFO] New model weights loaded`,
+        `[${formatDateTime(new Date())}] [WARN] Token usage approaching limit (81%)`,
+        `[${formatDateTime(new Date())}] [INFO] Health check passed`,
+        `[${formatDateTime(new Date())}] [DEBUG] API latency p99: 320ms`,
+        `[${formatDateTime(new Date())}] [INFO] Scheduled maintenance in 24h`,
       ]} />
+
+      <Dialog open={!!selectedRun} onOpenChange={(open) => !open && setSelectedRun(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Run Details</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {selectedRun && formatDateTime(selectedRun.timestamp)}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {selectedRun && (
+            <div className="space-y-4 pt-4">
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Prompt</h4>
+                <div className="p-3 rounded-md bg-muted text-sm whitespace-pre-wrap">
+                  {selectedRun.prompt || "N/A"}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Response</h4>
+                <div className="p-4 rounded-md border bg-muted/20 text-sm whitespace-pre-wrap leading-relaxed">
+                  {selectedRun.output}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-md border text-center">
+                  <div className="text-xs text-muted-foreground uppercase">Tokens</div>
+                  <div className="text-lg font-bold">{selectedRun.tokensUsed}</div>
+                </div>
+                <div className="p-3 rounded-md border text-center">
+                  <div className="text-xs text-muted-foreground uppercase">Latency</div>
+                  <div className="text-lg font-bold">{selectedRun.latency}ms</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
