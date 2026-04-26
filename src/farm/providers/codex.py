@@ -1,25 +1,26 @@
-import subprocess
+import asyncio
 import time
 from .base import BaseProvider, ProviderResponse
 
 class CodexProvider(BaseProvider):
-    def run(self, prompt: str) -> ProviderResponse:
+    async def run(self, prompt: str) -> ProviderResponse:
         start_time = time.time()
         
         try:
-            # Assuming 'codex' CLI takes the prompt as an argument.
-            # Adjust flags based on codex-cli 0.125.0 specific requirements.
-            result = subprocess.run(
-                ["codex", prompt],
-                capture_output=True,
-                text=True,
-                check=True
+            # Using asyncio subprocess for async execution
+            proc = await asyncio.create_subprocess_exec(
+                "codex", prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            text = result.stdout.strip()
-            success = True
-        except subprocess.CalledProcessError as e:
-            text = f"Error: {e.stderr}"
-            success = False
+            stdout, stderr = await proc.communicate()
+            
+            if proc.returncode == 0:
+                text = stdout.decode().strip()
+                success = True
+            else:
+                text = f"Error: {stderr.decode().strip()}"
+                success = False
         except Exception as e:
             text = f"Unexpected Error: {str(e)}"
             success = False

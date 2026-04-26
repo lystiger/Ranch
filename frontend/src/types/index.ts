@@ -13,7 +13,7 @@ export interface Agent {
 }
 
 export interface RunResult {
-  id?: number;
+  id?: string | number;
   agentId: string;
   output: string;
   tokensUsed: number;
@@ -51,6 +51,6 @@ export interface AgentMetrics {
 
 export interface RateRequest {
   agentId: string;
-  runId: number;
+  runId: string | number;
   score: number;
 }

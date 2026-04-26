@@ -1,12 +1,12 @@
+import asyncio
 import time
-import uuid
 from .base import ProviderResponse, BaseProvider
 
 class MockProvider(BaseProvider):
-    def run(self, prompt: str) -> ProviderResponse:
+    async def run(self, prompt: str) -> ProviderResponse:
         start_time = time.time()
         # Simulate some processing time
-        time.sleep(0.1)
+        await asyncio.sleep(0.1)
         response_text = f"Mock response to: {prompt}"
         latency = time.time() - start_time
         

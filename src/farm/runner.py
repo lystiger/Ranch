@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .models import Agent, Run, Metrics
@@ -22,6 +23,7 @@ def get_provider(provider_name: str):
 class Runner:
     def __init__(self, db: Session):
         self.db = db
+        self._lock = asyncio.Lock()
 
     def recover_energy(self, agent: Agent):
         """Passive energy recovery: 5% per hour since last run."""
@@ -42,44 +44,50 @@ class Runner:
         if recovery > 0:
             agent.energy = min(100, agent.energy + recovery)
 
-    def run_agent(self, agent_id: str, prompt: str) -> Run:
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
-        if not agent:
-            raise ValueError(f"Agent {agent_id} not found")
+    async def run_agent(self, agent_id: str, prompt: str) -> Run:
+        async with self._lock:
+            agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+            if not agent:
+                raise ValueError(f"Agent {agent_id} not found")
+            provider_name = agent.provider
 
-        provider = get_provider(agent.provider)
-        response = provider.run(prompt)
+        provider = get_provider(provider_name)
+        response = await provider.run(prompt)
 
-        # Create the Run record
-        run = Run(
-            id=str(uuid.uuid4()),
-            agent_id=agent.id,
-            prompt=prompt,
-            response=response.text,
-            tokens_input=response.tokens_input,
-            tokens_output=response.tokens_output,
-            latency=response.latency,
-            success=response.success,
-            timestamp=datetime.utcnow()
-        )
-        
-        # Update Agent state (Gamification)
-        if response.success:
-            agent.cookies += 1
-            # Simple energy consumption: 1% per 1000 tokens
-            total_tokens = response.tokens_input + response.tokens_output
-            agent.energy = max(0, agent.energy - (total_tokens // 1000))
-        else:
-            agent.is_dirty = True
-            agent.cookies = max(0, agent.cookies - 1)
+        async with self._lock:
+            # Re-fetch to ensure the agent object is attached to the current session
+            agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+            
+            # Create the Run record
+            run = Run(
+                id=str(uuid.uuid4()),
+                agent_id=agent.id,
+                prompt=prompt,
+                response=response.text,
+                tokens_input=response.tokens_input,
+                tokens_output=response.tokens_output,
+                latency=response.latency,
+                success=response.success,
+                timestamp=datetime.utcnow()
+            )
+            
+            # Update Agent state (Gamification)
+            if response.success:
+                agent.cookies += 1
+                # Simple energy consumption: 1% per 1000 tokens
+                total_tokens = response.tokens_input + response.tokens_output
+                agent.energy = max(0, agent.energy - (total_tokens // 1000))
+            else:
+                agent.is_dirty = True
+                agent.cookies = max(0, agent.cookies - 1)
 
-        # Update Metrics
-        self.update_metrics(agent, run)
+            # Update Metrics
+            self.update_metrics(agent, run)
 
-        self.db.add(run)
-        self.db.commit()
-        self.db.refresh(run)
-        return run
+            self.db.add(run)
+            self.db.commit()
+            self.db.refresh(run)
+            return run
 
     def update_metrics(self, agent: Agent, run: Run):
         metrics = agent.metrics

@@ -125,47 +125,46 @@ export const llmFarmRouter = createRouter({
     create: publicQuery
       .input(z.object({ agentIds: z.array(z.string()).min(1), prompt: z.string().min(1) }))
       .mutation(async ({ input }) => {
-        const agents = await findAgents();
-        const selected = agents.filter((a) => input.agentIds.includes(a.id));
-        const comparisonId = await createComparison(input.prompt);
+        const response = await fetch("http://localhost:8000/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: input.prompt }),
+        });
 
-        const results = await Promise.all(
-          selected.map(async (agent) => {
-            const latency = agent.latency + Math.floor(Math.random() * 100 - 50);
-            const tokensUsed = Math.floor(Math.random() * 4000 + 300);
-            const output = `**${agent.name}** response to "${input.prompt}":\n\nThis is a simulated response from ${agent.provider}'s ${agent.name} model. It provides a coherent, well-structured answer based on the input prompt with typical latency characteristics.`;
+        if (!response.ok) throw new Error("Backend comparison failed");
+        const data = await response.json();
 
-            await createComparisonResult({
-              comparisonId,
-              agentId: agent.id,
-              output,
-              tokensUsed,
-              latency,
-            });
+        // The backend returns results for ALL agents. We filter to match the requested agentIds.
+        const filteredData = data.filter((run: any) => input.agentIds.includes(run.agent_id));
 
-            return {
-              agentId: agent.id,
-              agentName: agent.name,
-              output,
-              tokensUsed,
-              latency,
-            };
-          })
-        );
+        // In a real app, we might want to fetch agent names from the backend too
+        const agentsResponse = await fetch("http://localhost:8000/agents");
+        const agents = await agentsResponse.json();
+        const agentMap = Object.fromEntries(agents.map((a: any) => [a.id, a.name]));
 
-        return { comparisonId, results };
+        const results = filteredData.map((run: any) => ({
+          agentId: run.agent_id,
+          agentName: agentMap[run.agent_id] || run.agent_id,
+          output: run.response,
+          tokensUsed: run.tokens_input + run.tokens_output,
+          latency: run.latency,
+        }));
+
+        return { comparisonId: "cmp_" + Date.now(), results };
       }),
   }),
 
   rate: createRouter({
     create: publicQuery
-      .input(z.object({ agentId: z.string(), runId: z.number(), score: z.number().min(1).max(5) }))
+      .input(z.object({ agentId: z.string(), runId: z.string(), score: z.number().min(1).max(10) }))
       .mutation(async ({ input }) => {
-        await createRating({
-          agentId: input.agentId,
-          runId: input.runId,
-          score: input.score,
+        const response = await fetch("http://localhost:8000/rate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ run_id: input.runId, rating: input.score }),
         });
+
+        if (!response.ok) throw new Error("Backend rating failed");
         return { success: true };
       }),
   }),

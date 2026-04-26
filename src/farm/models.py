@@ -36,6 +36,8 @@ class Run(Base):
     latency: Mapped[float] = mapped_column(Float, default=0.0)
     success: Mapped[bool] = mapped_column(Boolean, default=True)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1-10
+    judge_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 1-10
+    judge_feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     agent: Mapped["Agent"] = relationship(back_populates="runs")

@@ -10,7 +10,7 @@ class ProviderResponse(BaseModel):
 
 class BaseProvider(ABC):
     @abstractmethod
-    def run(self, prompt: str) -> ProviderResponse:
+    async def run(self, prompt: str) -> ProviderResponse:
         """Run the prompt through the model and return metrics."""
         pass
 

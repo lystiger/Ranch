@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from .database import SessionLocal, init_db
 from .models import Agent, Run, Metrics
 from .runner import Runner
+from .evaluator import Evaluator
 
 app = FastAPI(title="LLM Farm API")
 
@@ -53,6 +55,9 @@ class RunResponse(BaseModel):
     tokens_output: int
     latency: float
     success: bool
+    rating: Optional[int] = None
+    judge_score: Optional[int] = None
+    judge_feedback: Optional[str] = None
     timestamp: datetime
 
     class Config:
@@ -75,6 +80,9 @@ class CompareRequest(BaseModel):
 class RateRequest(BaseModel):
     run_id: str
     rating: int
+
+class JudgeRequest(BaseModel):
+    judge_agent_id: str = "gemini-1"
 
 # --- Endpoints ---
 
@@ -103,10 +111,10 @@ def get_agent(agent_id: str, db: Session = Depends(get_db)):
     return agent
 
 @app.post("/run", response_model=RunResponse)
-def run_prompt(req: RunRequest, db: Session = Depends(get_db)):
+async def run_prompt(req: RunRequest, db: Session = Depends(get_db)):
     runner = Runner(db)
     try:
-        run_data = runner.run_agent(req.agent_id, req.prompt)
+        run_data = await runner.run_agent(req.agent_id, req.prompt)
         return run_data
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -114,21 +122,22 @@ def run_prompt(req: RunRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/compare", response_model=List[RunResponse])
-def compare_prompt(req: CompareRequest, db: Session = Depends(get_db)):
+async def compare_prompt(req: CompareRequest, db: Session = Depends(get_db)):
     agents = db.query(Agent).all()
     if not agents:
         return []
     
     runner = Runner(db)
-    results = []
-    for agent in agents:
-        try:
-            run_data = runner.run_agent(agent.id, req.prompt)
-            results.append(run_data)
-        except Exception:
-            # Continue with other agents if one fails
-            continue
-    return results
+    
+    # Run all agents in parallel
+    tasks = [runner.run_agent(agent.id, req.prompt) for agent in agents]
+    
+    # Use return_exceptions=True so one failure doesn't stop others
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Filter out exceptions and return valid Run results
+    valid_results = [r for r in results if isinstance(r, Run)]
+    return valid_results
 
 @app.post("/rate")
 def rate_run(req: RateRequest, db: Session = Depends(get_db)):
@@ -142,3 +151,14 @@ def rate_run(req: RateRequest, db: Session = Depends(get_db)):
     run.rating = req.rating
     db.commit()
     return {"status": "success", "rating": req.rating}
+
+@app.post("/runs/{run_id}/judge")
+async def judge_run(run_id: str, req: JudgeRequest, db: Session = Depends(get_db)):
+    evaluator = Evaluator(db)
+    try:
+        result = await evaluator.evaluate_run(run_id, req.judge_agent_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

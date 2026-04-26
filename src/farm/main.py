@@ -1,9 +1,11 @@
+import asyncio
 import typer
 from rich.console import Console
 from rich.table import Table
 from .database import init_db, SessionLocal
 from .models import Agent
 from .runner import Runner
+from .evaluator import Evaluator
 
 app = typer.Typer(help="LLM Farm CLI: Observability and Management for AI Agents")
 console = Console()
@@ -16,56 +18,103 @@ def callback():
     init_db()
 
 @app.command()
+def judge(
+    run_id: str = typer.Argument(None, help="ID of the run to evaluate"),
+    agent: str = typer.Option("gemini-1", "--agent", "-a", help="Agent to use as judge"),
+    last: bool = typer.Option(False, "--last", "-L", help="Judge the most recent run")
+):
+    """Ask an agent (the Head Rancher) to judge a specific run."""
+    async def _judge():
+        with SessionLocal() as db:
+            evaluator = Evaluator(db)
+            
+            target_run_id = run_id
+            if last:
+                from .models import Run
+                last_run = db.query(Run).order_by(Run.timestamp.desc()).first()
+                if not last_run:
+                    console.print("[yellow]No runs found to judge.[/yellow]")
+                    return
+                target_run_id = last_run.id
+                
+            if not target_run_id:
+                console.print("[red]Error:[/red] Please provide a run_id or use --last")
+                return
+
+            try:
+                with console.status(f"[bold green]The Head Rancher ({agent}) is reviewing the run..."):
+                    result = await evaluator.evaluate_run(target_run_id, agent)
+                
+                console.print(f"\n[bold green]Evaluation Results for Run {target_run_id[:8]}:[/bold green]")
+                console.print(f"Score: [bold]{result['score']}/10[/bold]")
+                console.print(f"Feedback: {result['feedback']}")
+            except Exception as e:
+                console.print(f"[red]Error during evaluation:[/red] {e}")
+                raise typer.Exit(code=1)
+
+    asyncio.run(_judge())
+
+@app.command()
 def run(
     agent_id: str = typer.Argument(..., help="ID of the agent to run"),
     prompt: str = typer.Argument(..., help="The prompt to send to the agent")
 ):
     """Run a prompt through a specific agent."""
-    with SessionLocal() as db:
-        runner = Runner(db)
-        try:
-            with console.status(f"[bold green]Agent {agent_id} is thinking..."):
-                run_data = runner.run_agent(agent_id, prompt)
-            
-            console.print(f"\n[bold cyan]Response from {agent_id}:[/bold cyan]")
-            console.print(run_data.response)
-            console.print(f"\n[dim]Tokens: {run_data.tokens_input + run_data.tokens_output} | Latency: {run_data.latency:.2f}s[/dim]")
-        except ValueError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(code=1)
+    async def _run():
+        with SessionLocal() as db:
+            runner = Runner(db)
+            try:
+                with console.status(f"[bold green]Agent {agent_id} is thinking..."):
+                    run_data = await runner.run_agent(agent_id, prompt)
+                
+                console.print(f"\n[bold cyan]Response from {agent_id}:[/bold cyan]")
+                console.print(run_data.response)
+                console.print(f"\n[dim]Tokens: {run_data.tokens_input + run_data.tokens_output} | Latency: {run_data.latency:.2f}s[/dim]")
+            except ValueError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(code=1)
+
+    asyncio.run(_run())
 
 @app.command()
 def compare(
     prompt: str = typer.Argument(..., help="The prompt to compare across all agents")
 ):
     """Compare the output of all agents for a single prompt."""
-    with SessionLocal() as db:
-        agents = db.query(Agent).all()
-        if not agents:
-            console.print("[yellow]No agents found to compare.[/yellow]")
-            return
-        
-        runner = Runner(db)
-        table = Table(title=f"Comparison: {prompt[:50]}...")
-        table.add_column("Agent", style="cyan")
-        table.add_column("Response", ratio=3)
-        table.add_column("Latency", justify="right")
-        table.add_column("Tokens", justify="right")
+    async def _compare():
+        with SessionLocal() as db:
+            agents = db.query(Agent).all()
+            if not agents:
+                console.print("[yellow]No agents found to compare.[/yellow]")
+                return
+            
+            runner = Runner(db)
+            table = Table(title=f"Comparison: {prompt[:50]}...")
+            table.add_column("Agent", style="cyan")
+            table.add_column("Response", ratio=3)
+            table.add_column("Latency", justify="right")
+            table.add_column("Tokens", justify="right")
 
-        for agent in agents:
-            with console.status(f"[bold green]Consulting {agent.name}..."):
-                try:
-                    run_data = runner.run_agent(agent.id, prompt)
+            # Run all agents in parallel
+            tasks = [runner.run_agent(agent.id, prompt) for agent in agents]
+            
+            with console.status("[bold green]Consulting the herd in parallel..."):
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for agent, run_data in zip(agents, results):
+                if isinstance(run_data, Exception):
+                    table.add_row(agent.name, f"[red]Error: {run_data}[/red]", "N/A", "N/A")
+                else:
                     table.add_row(
                         agent.name,
                         run_data.response,
                         f"{run_data.latency:.2f}s",
                         str(run_data.tokens_input + run_data.tokens_output)
                     )
-                except Exception as e:
-                    table.add_row(agent.name, f"[red]Error: {e}[/red]", "N/A", "N/A")
-        
-        console.print(table)
+            
+            console.print(table)
+
+    asyncio.run(_compare())
 
 @app.command()
 def serve(
