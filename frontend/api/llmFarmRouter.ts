@@ -85,7 +85,7 @@ export const llmFarmRouter = createRouter({
           prompt: r.prompt,
           output: r.response,
           tokensUsed: r.tokens_input + r.tokens_output,
-          latency: r.latency,
+          latency: Number(r.latency.toFixed(2)),
           timestamp: new Date(r.timestamp).toISOString(),
         }));
 
@@ -121,7 +121,7 @@ export const llmFarmRouter = createRouter({
           agentId: data.agent_id,
           output: data.response,
           tokensUsed: data.tokens_input + data.tokens_output,
-          latency: data.latency,
+          latency: Number(data.latency.toFixed(2)),
           timestamp: new Date().toISOString(),
         };
       }),
@@ -153,7 +153,7 @@ export const llmFarmRouter = createRouter({
           agentName: agentMap[run.agent_id] || run.agent_id,
           output: run.response,
           tokensUsed: run.tokens_input + run.tokens_output,
-          latency: run.latency,
+          latency: Number(run.latency.toFixed(2)),
         }));
 
         return { comparisonId: "cmp_" + Date.now(), results };

@@ -146,7 +146,7 @@ export default function Compare() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm whitespace-pre-wrap bg-muted/40 rounded-md p-3">
+                  <p className="text-sm whitespace-pre-wrap break-words bg-muted/40 rounded-md p-3">
                     {res.output}
                   </p>
                   <div className="flex gap-4 text-xs text-muted-foreground">

@@ -13,7 +13,7 @@ export function Sidebar() {
   const location = useLocation();
 
   return (
-    <aside className="w-56 h-screen border-r bg-background flex flex-col fixed left-0 top-0">
+    <aside className="w-56 h-full border-r bg-background flex flex-col shrink-0">
       <div className="flex items-center gap-2 px-4 py-4 border-b">
         <div className="w-7 h-7 rounded bg-primary flex items-center justify-center">
           <Bot className="w-4 h-4 text-primary-foreground" />

@@ -47,3 +47,7 @@ htmlcov/
 # Project specific
 test_smoke.db
 farm.db
+
+# Bugs Images
+*.png
+*.jpg
