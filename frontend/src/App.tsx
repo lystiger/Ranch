@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard"
 import Agents from "./pages/Agents"
 import AgentDetail from "./pages/AgentDetail"
 import Compare from "./pages/Compare"
+import Game from "./pages/Game"
 import Settings from "./pages/Settings"
 import Summon from "./pages/Summon"
 import Login from "./pages/Login"
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/agents" element={<Agents />} />
         <Route path="/agents/:id" element={<AgentDetail />} />
         <Route path="/compare" element={<Compare />} />
+        <Route path="/game" element={<Game />} />
         <Route path="/summon" element={<Summon />} />
         <Route path="/settings" element={<Settings />} />
       </Route>

@@ -126,7 +126,7 @@ const AGENTS_DB = [
     color: '#f4d03f',
     outfit: 'Sand-colored apprentice robes, oversized scroll satchel, messy brown hair',
     specialty: 'Basic reasoning',
-    quote: 'I'm still learning, but I'll do my best!',
+    quote: "I'm still learning, but I'll do my best!",
   },
   {
     id: 'bloom',

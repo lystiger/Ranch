@@ -14,12 +14,15 @@ export default defineConfig({
     port: 3000,
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@contracts": path.resolve(__dirname, "./contracts"),
-      "@db": path.resolve(__dirname, "./db"),
-      "db": path.resolve(__dirname, "./db"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      { find: "@contracts", replacement: path.resolve(__dirname, "./contracts") },
+      { find: "@db", replacement: path.resolve(__dirname, "./db") },
+      { find: "db", replacement: path.resolve(__dirname, "./db") },
+      { find: /^react$/, replacement: path.resolve(__dirname, "./node_modules/react/index.js") },
+      { find: "react/jsx-runtime", replacement: path.resolve(__dirname, "./node_modules/react/jsx-runtime.js") },
+      { find: /^framer-motion$/, replacement: path.resolve(__dirname, "./node_modules/framer-motion/dist/es/index.mjs") },
+    ],
   },
   envDir: path.resolve(__dirname),
   build: {

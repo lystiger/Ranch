@@ -3,7 +3,7 @@ import { Sparkles, Cookie, Star, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { trpc } from "@/providers/trpc";
-import { Agent } from "@/types";
+import type { Agent } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
