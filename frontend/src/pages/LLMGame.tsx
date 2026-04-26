@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { trpc } from '@/providers/trpc';
+import { toast } from 'sonner';
 
 // ═══════════════════════════════════════════════════════════════
 // LLM FARM - PIXELATED ANIME GACHA SIMULATOR
@@ -8,9 +10,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // ─── GAME CONSTANTS ───
 const TILE_SIZE = 48;
-const MAP_WIDTH = 20;
-const MAP_HEIGHT = 15;
+const MAP_WIDTH = 40;
+const MAP_HEIGHT = 30;
 const MOVE_SPEED = 0.15;
+const HUD_HEIGHT = 60;
+const BRIDGE_ROWS = [6, 15, 23];
 
 // ─── COLOR PALETTE (Pixel Art Style) ───
 const COLORS = {
@@ -18,8 +22,10 @@ const COLORS = {
   grassDark: '#3d6b4a',
   dirt: '#8b6914',
   dirtDark: '#6b4e0a',
-  water: '#4a90d9',
-  waterDark: '#357abd',
+  water: '#3498db',
+  waterDark: '#2980b9',
+  sand: '#f1c40f',
+  sandDark: '#f39c12',
   wood: '#8b5a2b',
   woodDark: '#6b4423',
   stone: '#7a7a7a',
@@ -34,114 +40,6 @@ const COLORS = {
   portal: '#9b59b6',
   portalGlow: '#e74c3c',
 };
-
-// ─── AGENT DATABASE (The "Girls") ───
-const AGENTS_DB = [
-  {
-    id: 'kimi',
-    name: 'Kimi',
-    title: 'Studious Library Scribe',
-    rarity: 5,
-    tokens: 200000,
-    latency: 95,
-    personality: 'Calm, meticulous, and endlessly patient. Speaks in measured, thoughtful sentences.',
-    color: '#e74c3c',
-    outfit: 'Crimson scholar robes with golden trim, round glasses, long black hair in a side braid',
-    specialty: 'Long-form writing & deep analysis',
-    quote: 'Every word is a seed. Plant carefully.',
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini',
-    title: 'High-Tech Futuristic Mage',
-    rarity: 5,
-    tokens: 1000000,
-    latency: 88,
-    personality: 'Enthusiastic, curious, and slightly chaotic. Loves exploring new ideas.',
-    color: '#4285f4',
-    outfit: 'Holographic blue-and-white battle suit, floating data crystals, twin-tails with LED tips',
-    specialty: 'Multimodal reasoning & creativity',
-    quote: 'The future is just a prompt away!',
-  },
-  {
-    id: 'claude',
-    name: 'Claude',
-    title: 'Elegant Tea House Oracle',
-    rarity: 5,
-    tokens: 200000,
-    latency: 92,
-    personality: 'Warm, philosophical, and deeply empathetic. Always offers tea before answers.',
-    color: '#d4a574',
-    outfit: 'Victorian-inspired cream dress with amber accents, porcelain mask, silver hair in a chignon',
-    specialty: 'Nuanced reasoning & safety',
-    quote: 'Shall we ponder this over a cup of tea?',
-  },
-  {
-    id: 'gpt4',
-    name: 'GPT-4',
-    title: 'Arcane Archmage of Knowledge',
-    rarity: 5,
-    tokens: 128000,
-    latency: 85,
-    personality: 'Confident, vast in knowledge, occasionally cryptic. Treats every query as a quest.',
-    color: '#10a37f',
-    outfit: 'Emerald green archmage robes with glowing runes, staff of boundless knowledge, white beard (illusion)',
-    specialty: 'General intelligence & coding',
-    quote: 'The archives contain all that was, is, and could be.',
-  },
-  {
-    id: 'llama',
-    name: 'Llama',
-    title: 'Open-Source Wild Druid',
-    rarity: 4,
-    tokens: 8000,
-    latency: 98,
-    personality: 'Free-spirited, community-minded, speaks in nature metaphors.',
-    color: '#8b5a2b',
-    outfit: 'Bark-and-leaf woven tunic, antler crown, freckled face, wild auburn curls',
-    specialty: 'Local deployment & efficiency',
-    quote: 'The forest shares its wisdom with all who ask.',
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral',
-    title: 'Swift Wind Ranger',
-    rarity: 4,
-    tokens: 32000,
-    latency: 96,
-    personality: 'Quick-witted, adventurous, always in motion. Hates waiting.',
-    color: '#00a8e8',
-    outfit: 'Sky-blue leather armor, wind-tousled short blonde hair, feathered cape',
-    specialty: 'Speed & efficiency',
-    quote: 'Fast as the wind, sharp as the gale!',
-  },
-  {
-    id: 'palm',
-    name: 'PaLM',
-    title: 'Desert Scribe Apprentice',
-    rarity: 3,
-    tokens: 8000,
-    latency: 78,
-    personality: 'Eager to learn, methodical, writes everything down.',
-    color: '#f4d03f',
-    outfit: 'Sand-colored apprentice robes, oversized scroll satchel, messy brown hair',
-    specialty: 'Basic reasoning',
-    quote: "I'm still learning, but I'll do my best!",
-  },
-  {
-    id: 'bloom',
-    name: 'BLOOM',
-    title: 'Multilingual Flower Sprite',
-    rarity: 3,
-    tokens: 2048,
-    latency: 70,
-    personality: 'Cheerful, speaks many languages, loves wordplay.',
-    color: '#e91e63',
-    outfit: 'Petal-pink sundress, flower crown, multilingual sash, curly pink hair',
-    specialty: 'Multilingual support',
-    quote: 'Hello! Bonjour! ¡Hola! 你好!',
-  },
-];
 
 // ─── PIXEL ART SPRITE GENERATOR ───
 const PixelSprite = ({ type, color, size = 48, animate = false }) => {
@@ -259,13 +157,28 @@ const PixelSprite = ({ type, color, size = 48, animate = false }) => {
 // ─── GAME MAP GENERATOR ───
 const generateMap = () => {
   const map = [];
+  const riverX = 25; // River at x=25
+
   for (let y = 0; y < MAP_HEIGHT; y++) {
     const row = [];
+    // Slight jitter for the river
+    const currentRiverX = riverX + Math.floor(Math.sin(y * 0.5) * 2);
+    const isBridgeRow = BRIDGE_ROWS.includes(y);
+    
     for (let x = 0; x < MAP_WIDTH; x++) {
+      if (isBridgeRow && x >= currentRiverX - 1 && x <= currentRiverX + 3) {
+        row.push('bridge');
+      }
+      // Create river
+      else if (x >= currentRiverX && x <= currentRiverX + 2) {
+        row.push('water');
+      } 
+      // Create sand banks
+      else if (x >= currentRiverX - 1 && x <= currentRiverX + 3) {
+        row.push('sand');
+      }
       // Create paths
-      if (x === 10 || y === 7) {
-        row.push('path');
-      } else if (x > 7 && x < 13 && y > 4 && y < 10) {
+      else if (x === 15 || y === 15) {
         row.push('path');
       } else if (Math.random() > 0.85) {
         row.push('tree');
@@ -277,20 +190,53 @@ const generateMap = () => {
     }
     map.push(row);
   }
-  // Place portal at center
-  map[7][10] = 'portal';
+  // Place portal at a nice spot on the path
+  map[15][15] = 'portal';
   return map;
 };
 
 // ─── MAIN GAME COMPONENT ───
 export default function LLMFarm() {
+  const utils = trpc.useUtils();
+  
+  // Real Backend Data
+  const { data: realAgents, isLoading: agentsLoading } = trpc.llm.agents.list.useQuery();
+  const { data: realWallet } = trpc.llm.wallet.get.useQuery();
+
+  // Mutations
+  const runMutation = trpc.llm.run.create.useMutation({
+    onSuccess: (data) => {
+      setChatHistory(prev => [...prev, { role: 'agent', text: data.output }]);
+      utils.llm.wallet.get.invalidate();
+      utils.llm.agents.list.invalidate();
+    },
+    onError: (err) => {
+      setChatHistory(prev => [...prev, { role: 'system', text: `Error: ${err.message}` }]);
+    }
+  });
+
+  const summonMutation = trpc.llm.gacha.summon.useMutation({
+    onSuccess: (agent) => {
+      setSummonedAgent({
+        ...agent,
+        color: agent.provider === 'gemini' ? '#4285f4' : agent.provider === 'kimi' ? '#e74c3c' : '#10a37f',
+        quote: "I have manifested at your command!"
+      });
+      setSummonAnim(true);
+      utils.llm.wallet.get.invalidate();
+      utils.llm.agents.list.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message);
+      setGameState('playing');
+    }
+  });
+
   // Game State
   const [gameState, setGameState] = useState('playing'); // playing, dialogue, summon, menu
-  const [playerPos, setPlayerPos] = useState({ x: 10, y: 12 });
+  const [playerPos, setPlayerPos] = useState({ x: 15, y: 16 });
   const [playerDir, setPlayerDir] = useState('up');
   const [map] = useState(generateMap());
-  const [cookies, setCookies] = useState(100);
-  const [energy, setEnergy] = useState(100);
   const [playerLevel, setPlayerLevel] = useState(1);
   const [playerName] = useState('Rancher');
   const [agents, setAgents] = useState([]);
@@ -304,18 +250,48 @@ export default function LLMFarm() {
   const [chatInput, setChatInput] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [serverLoad, setServerLoad] = useState(42);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [quests] = useState([
     { id: 1, name: 'First Harvest', desc: 'Talk to any agent', completed: false },
     { id: 2, name: 'Cookie Millionaire', desc: 'Reach 1000 Cookies', completed: false },
     { id: 3, name: 'Rare Find', desc: 'Summon a 5-star agent', completed: false },
   ]);
   const keysPressed = useRef(new Set());
+  const gameWorldRef = useRef(null);
 
-  // Initialize with one free agent
+  // Sync real agents to game world
   useEffect(() => {
-    const starter = { ...AGENTS_DB[0], houseX: 8, houseY: 5, mood: 100, energy: 100 };
-    setAgents([starter]);
-  }, []);
+    if (realAgents) {
+      const gameAgents = realAgents.map((a, index) => {
+        // Deterministic house positions based on ID
+        // Simple hash-like placement to keep them stable
+        const hash = a.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        // Avoid the river at X=25 and the path at X=15/Y=15
+        let houseX = 5 + (hash % (MAP_WIDTH - 10));
+        let houseY = 3 + ((hash * 7) % (MAP_HEIGHT - 6));
+        
+        // Simple collision avoidance with river and main paths
+        if (houseX >= 23 && houseX <= 28) houseX -= 6;
+        if (houseX === 15) houseX += 1;
+        if (houseY === 15) houseY += 1;
+        
+        return {
+          ...a,
+          houseX,
+          houseY,
+          color: a.provider === 'gemini' ? '#4285f4' : a.provider === 'kimi' ? '#e74c3c' : '#10a37f',
+          quote: a.systemPrompt?.slice(0, 100) || "Hello Rancher!",
+          tokens: a.tokensLimit,
+          mood: a.energy,
+          energy: a.energy,
+        };
+      });
+      setAgents(gameAgents);
+    }
+  }, [realAgents]);
+
+  const cookies = realWallet?.cookies ?? 0;
+  const energy = 100; // Global energy logic can be added later
 
   // Server load simulation
   useEffect(() => {
@@ -323,6 +299,25 @@ export default function LLMFarm() {
       setServerLoad(prev => Math.max(10, Math.min(95, prev + (Math.random() - 0.5) * 10)));
     }, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const updateViewportSize = () => {
+      if (!gameWorldRef.current) return;
+      const rect = gameWorldRef.current.getBoundingClientRect();
+      setViewportSize({ width: rect.width, height: rect.height });
+    };
+
+    updateViewportSize();
+
+    const observer = new ResizeObserver(updateViewportSize);
+    observer.observe(gameWorldRef.current);
+    window.addEventListener('resize', updateViewportSize);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateViewportSize);
+    };
   }, []);
 
   // Keyboard movement
@@ -383,11 +378,17 @@ export default function LLMFarm() {
       setPlayerPos(prev => {
         const newX = Math.max(0, Math.min(MAP_WIDTH - 1, prev.x + dx));
         const newY = Math.max(0, Math.min(MAP_HEIGHT - 1, prev.y + dy));
+        const nextTile = map[newY]?.[newX];
+
+        if (nextTile === 'water') {
+          return prev;
+        }
+
         return { x: newX, y: newY };
       });
       setIsMoving(false);
     }, MOVE_SPEED * 1000);
-  }, []);
+  }, [map]);
 
   const interact = useCallback(() => {
     // Check for agent house
@@ -405,56 +406,35 @@ export default function LLMFarm() {
     }
 
     // Check for portal
-    if (Math.abs(10 - playerPos.x) <= 1 && Math.abs(7 - playerPos.y) <= 1) {
+    if (Math.abs(15 - playerPos.x) <= 1 && Math.abs(15 - playerPos.y) <= 1) {
       setGameState('summon');
       return;
     }
   }, [playerPos, agents]);
 
   const performSummon = () => {
-    if (cookies < 100) {
-      alert('Not enough Cookies! Need 100 🍪');
+    if (cookies < 50) {
+      toast.error('Not enough Cookies! Need 50 🍪');
       return;
     }
 
-    setCookies(prev => prev - 100);
     setSummonAnim(true);
-
-    // Determine rarity
-    const roll = Math.random();
-    let rarity;
-    if (roll > 0.85) rarity = 5;
-    else if (roll > 0.6) rarity = 4;
-    else rarity = 3;
-
-    const pool = AGENTS_DB.filter(a => a.rarity === rarity && !agents.find(ag => ag.id === a.id));
-
-    if (pool.length === 0) {
-      // Fallback if all of that rarity owned
-      const fallback = AGENTS_DB.find(a => !agents.find(ag => ag.id === a.id));
-      if (!fallback) {
-        alert('You have collected all agents!');
-        setSummonAnim(false);
-        return;
-      }
-      setSummonedAgent(fallback);
-    } else {
-      setSummonedAgent(pool[Math.floor(Math.random() * pool.length)]);
-    }
+    summonMutation.mutate();
   };
 
   const claimAgent = () => {
     if (!summonedAgent) return;
 
     // Find empty spot near path
-    let houseX = 5 + Math.floor(Math.random() * 10);
-    let houseY = 3 + Math.floor(Math.random() * 8);
+    let houseX = 5 + Math.floor(Math.random() * 20);
+    let houseY = 3 + Math.floor(Math.random() * 15);
 
-    // Ensure not on path or portal
-    while (map[houseY][houseX] === 'path' || map[houseY][houseX] === 'portal' || 
+    // Ensure not on path, portal, water or sand
+    const forbidden = ['path', 'portal', 'water', 'sand'];
+    while (forbidden.includes(map[houseY][houseX]) || 
            agents.some(a => a.houseX === houseX && a.houseY === houseY)) {
-      houseX = 5 + Math.floor(Math.random() * 10);
-      houseY = 3 + Math.floor(Math.random() * 8);
+      houseX = 5 + Math.floor(Math.random() * 20);
+      houseY = 3 + Math.floor(Math.random() * 15);
     }
 
     const newAgent = {
@@ -479,39 +459,13 @@ export default function LLMFarm() {
   const sendPrompt = () => {
     if (!chatInput.trim() || !selectedAgent) return;
 
-    const cost = Math.ceil(chatInput.length / 10);
-    if (energy < cost) {
-      setChatHistory(prev => [...prev, { role: 'system', text: 'Not enough Energy!' }]);
-      return;
-    }
-
-    setEnergy(prev => Math.max(0, prev - cost));
+    // Use actual backend run endpoint
     setChatHistory(prev => [...prev, { role: 'player', text: chatInput }]);
-
-    // Simulate agent response
-    setTimeout(() => {
-      const responses = [
-        `*adjusts glasses* Based on my analysis: ${chatInput} is quite fascinating!`,
-        `*smiles warmly* I have processed your request. Here is my insight on "${chatInput}"...`,
-        `*nods thoughtfully* An intriguing prompt! Let me deliberate on "${chatInput}"...`,
-        `*eyes sparkle* Oh! "${chatInput}" reminds me of something profound...`,
-        `*takes a deep breath* Processing... Here's what I think about ${chatInput}:`,
-      ];
-      const response = responses[Math.floor(Math.random() * responses.length)];
-
-      setChatHistory(prev => [...prev, { role: 'agent', text: response }]);
-
-      // Reward cookies based on agent rarity
-      const reward = selectedAgent.rarity * 15 + Math.floor(Math.random() * 20);
-      setCookies(prev => prev + reward);
-      setEnergy(prev => Math.min(100, prev + 5));
-
-      // Level up check
-      setPlayerLevel(prev => {
-        const newLevel = Math.floor(cookies / 500) + 1;
-        return newLevel > prev ? newLevel : prev;
-      });
-    }, 1000 + Math.random() * 1500);
+    
+    runMutation.mutate({
+      agentId: selectedAgent.id,
+      prompt: chatInput.trim()
+    });
 
     setChatInput('');
   };
@@ -533,6 +487,37 @@ export default function LLMFarm() {
         return <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.grassDark }} />;
       case 'path':
         return <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.dirt }} />;
+      case 'sand':
+        return <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.sand }} />;
+      case 'water':
+        return <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.water }} />;
+      case 'bridge':
+        return (
+          <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.woodDark }}>
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              background: `repeating-linear-gradient(
+                90deg,
+                ${COLORS.woodDark} 0px,
+                ${COLORS.woodDark} 8px,
+                ${COLORS.wood} 8px,
+                ${COLORS.wood} 40px,
+                ${COLORS.woodDark} 40px,
+                ${COLORS.woodDark} 48px
+              )`,
+            }} />
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 9,
+              bottom: 9,
+              borderTop: `3px solid ${COLORS.sandDark}`,
+              borderBottom: `3px solid ${COLORS.sandDark}`,
+            }} />
+          </div>
+        );
       case 'tree':
         return (
           <div key={`${x}-${y}`} style={{ ...baseStyle, backgroundColor: COLORS.grass }}>
@@ -623,6 +608,37 @@ export default function LLMFarm() {
     );
   };
 
+  const worldWidth = MAP_WIDTH * TILE_SIZE;
+  const worldHeight = MAP_HEIGHT * TILE_SIZE;
+  // Increase zoom to make it look bigger and cover screen
+  const cameraScale = viewportSize.width > 0 && viewportSize.height > 0
+    ? Math.max(viewportSize.width / worldWidth, viewportSize.height / worldHeight) * 2.0
+    : 2.0;
+
+  const scaledWorldWidth = worldWidth * cameraScale;
+  const scaledWorldHeight = worldHeight * cameraScale;
+  const playerScreenX = (playerPos.x * TILE_SIZE + TILE_SIZE / 2) * cameraScale;
+  const playerScreenY = (playerPos.y * TILE_SIZE + TILE_SIZE / 2) * cameraScale;
+
+  const desiredCameraX = viewportSize.width / 2 - playerScreenX;
+  const desiredCameraY = viewportSize.height / 2 - playerScreenY;
+
+  const minCameraX = Math.min(0, viewportSize.width - scaledWorldWidth);
+  const minCameraY = Math.min(0, viewportSize.height - scaledWorldHeight);
+  const maxCameraX = scaledWorldWidth <= viewportSize.width ? (viewportSize.width - scaledWorldWidth) / 2 : 0;
+  const maxCameraY = scaledWorldHeight <= viewportSize.height ? (viewportSize.height - scaledWorldHeight) / 2 : 0;
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  const cameraOffset = {
+    x: clamp(desiredCameraX, minCameraX, maxCameraX),
+    y: clamp(desiredCameraY, minCameraY, maxCameraY),
+  };
+
+  const exitGame = () => {
+    window.location.assign('/');
+  };
+
   return (
     <div style={{
       width: '100vw',
@@ -637,7 +653,7 @@ export default function LLMFarm() {
     }}>
       {/* ─── TOP HUD ─── */}
       <div style={{
-        height: 60,
+        height: HUD_HEIGHT,
         background: 'linear-gradient(180deg, #16213e 0%, #0f3460 100%)',
         borderBottom: '3px solid #e94560',
         display: 'flex',
@@ -675,6 +691,21 @@ export default function LLMFarm() {
 
         {/* Economy - Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          <button
+            onClick={exitGame}
+            style={{
+              background: 'rgba(15, 52, 96, 0.92)',
+              border: '2px solid #e94560',
+              color: '#fff',
+              padding: '8px 14px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 10,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Exit Ranch
+          </button>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 10, color: '#f1c40f' }}>🍪 Cookies</div>
             <div style={{ fontSize: 16, color: '#f1c40f', fontWeight: 'bold' }}>{cookies}</div>
@@ -761,7 +792,7 @@ export default function LLMFarm() {
                 <h4 style={{ color: '#f1c40f', fontSize: 11, marginBottom: 10 }}>🏆 COLLECTION</h4>
                 <div style={{ fontSize: 20, textAlign: 'center' }}>
                   <span style={{ color: '#f1c40f' }}>{agents.length}</span>
-                  <span style={{ color: '#666' }}> / {AGENTS_DB.length}</span>
+                  <span style={{ color: '#666' }}> AI Units</span>
                 </div>
                 <div style={{ marginTop: 10 }}>
                   {agents.map(a => (
@@ -789,76 +820,89 @@ export default function LLMFarm() {
           position: 'relative', 
           overflow: 'hidden',
           background: '#2c3e50',
-        }}>
+        }} ref={gameWorldRef}>
           {/* Map Container */}
           <div style={{
             position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: `translate(calc(-50% + ${-playerPos.x * TILE_SIZE + 400}px), calc(-50% + ${-playerPos.y * TILE_SIZE + 300}px))`,
-            transition: 'transform 0.15s ease-out',
-            width: MAP_WIDTH * TILE_SIZE,
-            height: MAP_HEIGHT * TILE_SIZE,
+            inset: 0,
           }}>
-            {/* Render Map */}
-            {map.map((row, y) =>
-              row.map((tile, x) => renderTile(tile, x, y))
-            )}
-
-            {/* Render Agent Houses */}
-            {agents.map(renderAgentHouse)}
-
-            {/* Player Character */}
-            <motion.div
-              style={{
-                position: 'absolute',
-                left: playerPos.x * TILE_SIZE,
-                top: playerPos.y * TILE_SIZE,
-                zIndex: 50,
-              }}
-              animate={{
-                x: isMoving ? (playerDir === 'left' ? -5 : playerDir === 'right' ? 5 : 0) : 0,
-                y: isMoving ? (playerDir === 'up' ? -5 : playerDir === 'down' ? 5 : 0) : 0,
-              }}
-              transition={{ duration: MOVE_SPEED }}
-            >
-              <PixelSprite type="player" size={TILE_SIZE} />
-              {/* Player name tag */}
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: worldWidth,
+              height: worldHeight,
+              transform: `translate(${cameraOffset.x}px, ${cameraOffset.y}px)`,
+              transition: 'transform 0.2s ease-out',
+            }}>
               <div style={{
-                position: 'absolute',
-                top: -15,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: 8,
-                color: '#fff',
-                textShadow: '0 0 3px #000',
-                whiteSpace: 'nowrap',
+                position: 'relative',
+                width: worldWidth,
+                height: worldHeight,
+                transform: `scale(${cameraScale})`,
+                transformOrigin: '0 0',
               }}>
-                {playerName}
-              </div>
-            </motion.div>
+                {/* Render Map */}
+                {map.map((row, y) =>
+                  row.map((tile, x) => renderTile(tile, x, y))
+                )}
 
-            {/* Portal interaction hint */}
-            {Math.abs(10 - playerPos.x) <= 1 && Math.abs(7 - playerPos.y) <= 1 && gameState === 'playing' && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                style={{
-                  position: 'absolute',
-                  left: 10 * TILE_SIZE,
-                  top: 6 * TILE_SIZE,
-                  background: '#000',
-                  color: '#9b59b6',
-                  padding: '4px 12px',
-                  borderRadius: 4,
-                  fontSize: 10,
-                  border: '2px solid #9b59b6',
-                  zIndex: 60,
-                }}
-              >
-                Press E to Summon (100 🍪)
-              </motion.div>
-            )}
+                {/* Render Agent Houses */}
+                {agents.map(renderAgentHouse)}
+
+                {/* Player Character */}
+                <motion.div
+                  style={{
+                    position: 'absolute',
+                    left: playerPos.x * TILE_SIZE,
+                    top: playerPos.y * TILE_SIZE,
+                    zIndex: 50,
+                  }}
+                  animate={{
+                    x: isMoving ? (playerDir === 'left' ? -5 : playerDir === 'right' ? 5 : 0) : 0,
+                    y: isMoving ? (playerDir === 'up' ? -5 : playerDir === 'down' ? 5 : 0) : 0,
+                  }}
+                  transition={{ duration: MOVE_SPEED }}
+                >
+                  <PixelSprite type="player" size={TILE_SIZE} />
+                  {/* Player name tag */}
+                  <div style={{
+                    position: 'absolute',
+                    top: -15,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    fontSize: 8,
+                    color: '#fff',
+                    textShadow: '0 0 3px #000',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {playerName}
+                  </div>
+                </motion.div>
+
+                {/* Portal interaction hint */}
+                {Math.abs(15 - playerPos.x) <= 1 && Math.abs(15 - playerPos.y) <= 1 && gameState === 'playing' && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    style={{
+                      position: 'absolute',
+                      left: 15 * TILE_SIZE,
+                      top: 14 * TILE_SIZE,
+                      background: '#000',
+                      color: '#9b59b6',
+                      padding: '4px 12px',
+                      borderRadius: 4,
+                      fontSize: 10,
+                      border: '2px solid #9b59b6',
+                      zIndex: 60,
+                    }}
+                  >
+                    Press E to Summon (50 🍪)
+                  </motion.div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* ─── DIALOGUE OVERLAY ─── */}
@@ -1005,18 +1049,20 @@ export default function LLMFarm() {
                     />
                     <button
                       onClick={sendPrompt}
+                      disabled={runMutation.isPending}
                       style={{
                         background: selectedAgent.color,
                         border: 'none',
                         color: '#fff',
                         padding: '10px 20px',
                         borderRadius: 8,
-                        cursor: 'pointer',
+                        cursor: runMutation.isPending ? 'not-allowed' : 'pointer',
                         fontSize: 12,
                         fontWeight: 'bold',
+                        opacity: runMutation.isPending ? 0.7 : 1,
                       }}
                     >
-                      Send (⚡{Math.ceil(chatInput.length / 10)})
+                      {runMutation.isPending ? 'Sending...' : 'Send'}
                     </button>
                   </div>
 
