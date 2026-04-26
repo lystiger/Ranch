@@ -11,8 +11,14 @@ class Agent(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String)
+    title: Mapped[Optional[str]] = mapped_column(String, nullable=True) # e.g. "The Sapphire Scribe"
     provider: Mapped[str] = mapped_column(String)
     token_limit: Mapped[int] = mapped_column(Integer, default=50000)
+    
+    # Gacha / Persona
+    rarity: Mapped[int] = mapped_column(Integer, default=3) # 3, 4, or 5 stars
+    trait: Mapped[Optional[str]] = mapped_column(String, nullable=True) # e.g. "Scholar"
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Gamification / State
     cookies: Mapped[int] = mapped_column(Integer, default=0)
@@ -52,3 +58,10 @@ class Metrics(Base):
     performance_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     agent: Mapped["Agent"] = relationship(back_populates="metrics")
+
+class Wallet(Base):
+    __tablename__ = "wallet"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cookies: Mapped[int] = mapped_column(Integer, default=500) # Starter pack
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

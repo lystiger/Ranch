@@ -1,4 +1,4 @@
-import { LayoutDashboard, Bot, GitCompareArrows, Settings } from "lucide-react";
+import { LayoutDashboard, Bot, GitCompareArrows, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "react-router-dom";
 
@@ -6,6 +6,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Bot, label: "Agents", path: "/agents" },
   { icon: GitCompareArrows, label: "Compare", path: "/compare" },
+  { icon: Sparkles, label: "Summon", path: "/summon" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 

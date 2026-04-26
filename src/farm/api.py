@@ -6,22 +6,22 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from .database import SessionLocal, init_db
-from .models import Agent, Run, Metrics
+from .models import Agent, Run, Metrics, Wallet
 from .runner import Runner
 from .evaluator import Evaluator
+from .gacha import GachaEngine
 
 app = FastAPI(title="LLM Farm API")
 
 # Enable CORS for the React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify the actual origin
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
@@ -31,14 +31,25 @@ def get_db():
 
 # --- Pydantic Models ---
 
+class WalletBase(BaseModel):
+    cookies: int
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class AgentBase(BaseModel):
     id: str
     name: str
+    title: Optional[str] = None
     provider: str
+    rarity: int
+    trait: Optional[str] = None
     token_limit: int
     cookies: int
     energy: int
     is_dirty: bool
+    system_prompt: Optional[str] = None
 
 class MetricsBase(BaseModel):
     avg_latency: float
@@ -56,8 +67,6 @@ class RunResponse(BaseModel):
     latency: float
     success: bool
     rating: Optional[int] = None
-    judge_score: Optional[int] = None
-    judge_feedback: Optional[str] = None
     timestamp: datetime
 
     class Config:
@@ -89,6 +98,22 @@ class JudgeRequest(BaseModel):
 @app.on_event("startup")
 def startup():
     init_db()
+
+@app.get("/wallet", response_model=WalletBase)
+def get_wallet(db: Session = Depends(get_db)):
+    wallet = db.query(Wallet).first()
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+    return wallet
+
+@app.post("/summon", response_model=AgentDetail)
+def summon_agent(db: Session = Depends(get_db)):
+    engine = GachaEngine(db)
+    try:
+        new_agent = engine.perform_summon()
+        return new_agent
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/agents", response_model=List[AgentDetail])
 def get_agents(db: Session = Depends(get_db)):
@@ -128,14 +153,8 @@ async def compare_prompt(req: CompareRequest, db: Session = Depends(get_db)):
         return []
     
     runner = Runner(db)
-    
-    # Run all agents in parallel
     tasks = [runner.run_agent(agent.id, req.prompt) for agent in agents]
-    
-    # Use return_exceptions=True so one failure doesn't stop others
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Filter out exceptions and return valid Run results
     valid_results = [r for r in results if isinstance(r, Run)]
     return valid_results
 
@@ -144,10 +163,8 @@ def rate_run(req: RateRequest, db: Session = Depends(get_db)):
     run = db.query(Run).filter(Run.id == req.run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    
     if not (1 <= req.rating <= 10):
         raise HTTPException(status_code=400, detail="Rating must be between 1 and 10")
-    
     run.rating = req.rating
     db.commit()
     return {"status": "success", "rating": req.rating}

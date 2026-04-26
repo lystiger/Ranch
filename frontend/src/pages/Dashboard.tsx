@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
-import { Activity, Clock, Cpu, TrendingUp } from "lucide-react";
+import { Activity, Clock, Cpu, TrendingUp, Sparkles, Cookie } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { AgentCard } from "@/components/AgentCard";
 import { trpc } from "@/providers/trpc";
 import {
@@ -17,6 +18,7 @@ import {
 
 export default function Dashboard() {
   const { data: agents, isLoading } = trpc.llm.agents.list.useQuery();
+  const { data: wallet } = trpc.llm.wallet.get.useQuery();
   const navigate = useNavigate();
 
   const agentList = agents ?? [];
@@ -40,11 +42,23 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Overview of all LLM agents
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Overview of all LLM agents
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full border border-primary/10">
+            <Cookie className="w-4 h-4 text-amber-500" />
+            <span className="font-bold text-sm">{wallet?.cookies ?? "..."}</span>
+          </div>
+          <Button size="sm" variant="secondary" onClick={() => navigate("/summon")}>
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+            Summon
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 min-w-0">

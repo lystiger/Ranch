@@ -5,6 +5,7 @@ import Agents from "./pages/Agents"
 import AgentDetail from "./pages/AgentDetail"
 import Compare from "./pages/Compare"
 import Settings from "./pages/Settings"
+import Summon from "./pages/Summon"
 import Login from "./pages/Login"
 import NotFound from "./pages/NotFound"
 
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/agents" element={<Agents />} />
         <Route path="/agents/:id" element={<AgentDetail />} />
         <Route path="/compare" element={<Compare />} />
+        <Route path="/summon" element={<Summon />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="/login" element={<Login />} />

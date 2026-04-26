@@ -1,6 +1,7 @@
 export interface Agent {
   id: string;
   name: string;
+  title?: string | null;
   provider: string;
   status: "online" | "degraded" | "offline";
   tokensUsed: number;
@@ -8,8 +9,11 @@ export interface Agent {
   latency: number;
   performanceScore: number;
   cookies: number;
+  rarity: number;
+  trait?: string | null;
   description?: string | null;
   createdAt?: Date | string;
+  systemPrompt?: string | null;
 }
 
 export interface RunResult {
@@ -53,4 +57,9 @@ export interface RateRequest {
   agentId: string;
   runId: string | number;
   score: number;
+}
+
+export interface Wallet {
+  cookies: number;
+  updatedAt: string;
 }

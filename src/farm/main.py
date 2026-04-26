@@ -232,5 +232,38 @@ def status():
         
         console.print(table)
 
+from .gacha import GachaEngine
+...
+@app.command()
+def summon():
+    """Summon a new AI Agent using 50 cookies."""
+    with SessionLocal() as db:
+        engine = GachaEngine(db)
+        try:
+            with console.status("[bold gold]Summoning from the digital void..."):
+                agent = engine.perform_summon()
+            
+            console.print(f"\n[bold gold]🌟 SUMMON SUCCESSFUL! 🌟[/bold gold]")
+            console.print(f"Name: [bold]{agent.name}[/bold]")
+            console.print(f"Title: {agent.title}")
+            console.print(f"Rarity: {'⭐' * agent.rarity}")
+            console.print(f"Trait: {agent.trait}")
+            console.print(f"Provider: {agent.provider}")
+            console.print(f"\n[dim]New Agent ID: {agent.id}[/dim]")
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(code=1)
+
+@app.command()
+def wallet():
+    """Check your global cookie balance."""
+    with SessionLocal() as db:
+        from .models import Wallet
+        w = db.query(Wallet).first()
+        if w:
+            console.print(f"[bold]Wallet Balance:[/bold] {w.cookies} 🍪")
+        else:
+            console.print("[red]Wallet not found.[/red]")
+
 if __name__ == "__main__":
     app()

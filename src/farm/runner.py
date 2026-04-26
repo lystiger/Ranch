@@ -2,7 +2,7 @@ import uuid
 import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
-from .models import Agent, Run, Metrics
+from .models import Agent, Run, Metrics, Wallet
 from .providers.mock import MockProvider
 from .providers.gemini import GeminiProvider
 from .providers.codex import CodexProvider
@@ -50,13 +50,21 @@ class Runner:
             if not agent:
                 raise ValueError(f"Agent {agent_id} not found")
             provider_name = agent.provider
+            persona_prompt = agent.system_prompt
 
         provider = get_provider(provider_name)
-        response = await provider.run(prompt)
+        
+        # Inject persona if available
+        final_prompt = prompt
+        if persona_prompt:
+            final_prompt = f"Personality instructions: {persona_prompt}\n\nUser request: {prompt}"
+
+        response = await provider.run(final_prompt)
 
         async with self._lock:
             # Re-fetch to ensure the agent object is attached to the current session
             agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+            wallet = self.db.query(Wallet).first()
             
             # Create the Run record
             run = Run(
@@ -74,6 +82,9 @@ class Runner:
             # Update Agent state (Gamification)
             if response.success:
                 agent.cookies += 1
+                if wallet:
+                    wallet.cookies += 10 # Global reward
+                
                 # Simple energy consumption: 1% per 1000 tokens
                 total_tokens = response.tokens_input + response.tokens_output
                 agent.energy = max(0, agent.energy - (total_tokens // 1000))
