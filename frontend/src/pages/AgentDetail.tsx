@@ -262,7 +262,7 @@ export default function AgentDetail() {
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-muted-foreground text-xs shrink-0">
-                      {new Date(run.createdAt).toLocaleTimeString()}
+                      {run.timestamp ? new Date(run.timestamp).toLocaleTimeString() : "N/A"}
                     </span>
                     <span className="truncate">{run.output ?? run.prompt ?? "Run"}</span>
                   </div>
@@ -278,21 +278,21 @@ export default function AgentDetail() {
       </Card>
 
       <LogsViewer logs={[
-        "[INFO] Agent initialized successfully",
-        "[INFO] Token budget refreshed",
-        "[DEBUG] Cache hit ratio: 0.87",
-        "[INFO] Processing request #48291",
-        "[WARN] High latency detected (650ms)",
-        "[INFO] Retrying with exponential backoff",
-        "[DEBUG] Context window: 14200 / 128000 tokens",
-        "[INFO] Request completed in 420ms",
-        "[INFO] Garbage collection triggered",
-        "[DEBUG] Memory usage: 2.4GB / 8GB",
-        "[INFO] New model weights loaded",
-        "[WARN] Token usage approaching limit (81%)",
-        "[INFO] Health check passed",
-        "[DEBUG] API latency p99: 320ms",
-        "[INFO] Scheduled maintenance in 24h",
+        `[${new Date().toISOString()}] [INFO] Agent initialized successfully`,
+        `[${new Date().toISOString()}] [INFO] Token budget refreshed`,
+        `[${new Date().toISOString()}] [DEBUG] Cache hit ratio: 0.87`,
+        `[${new Date().toISOString()}] [INFO] Processing request #48291`,
+        `[${new Date().toISOString()}] [WARN] High latency detected (650ms)`,
+        `[${new Date().toISOString()}] [INFO] Retrying with exponential backoff`,
+        `[${new Date().toISOString()}] [DEBUG] Context window: 14200 / 128000 tokens`,
+        `[${new Date().toISOString()}] [INFO] Request completed in 420ms`,
+        `[${new Date().toISOString()}] [INFO] Garbage collection triggered`,
+        `[${new Date().toISOString()}] [DEBUG] Memory usage: 2.4GB / 8GB`,
+        `[${new Date().toISOString()}] [INFO] New model weights loaded`,
+        `[${new Date().toISOString()}] [WARN] Token usage approaching limit (81%)`,
+        `[${new Date().toISOString()}] [INFO] Health check passed`,
+        `[${new Date().toISOString()}] [DEBUG] API latency p99: 320ms`,
+        `[${new Date().toISOString()}] [INFO] Scheduled maintenance in 24h`,
       ]} />
     </div>
   );

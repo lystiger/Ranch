@@ -26,7 +26,7 @@ export function LogsViewer({ logs, maxHeight = "300px" }: LogsViewerProps) {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <ScrollArea className="w-full" style={{ maxHeight }}>
+      <ScrollArea className="w-full overflow-y-auto" style={{ height: maxHeight }}>
         <div className="p-3 space-y-1">
           {logs.map((log, i) => {
             const isError = log.includes("[ERROR]") || log.includes("[WARN]");

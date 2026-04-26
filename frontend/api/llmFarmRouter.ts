@@ -30,6 +30,8 @@ export const llmFarmRouter = createRouter({
         latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
         performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
         cookies: a.cookies,
+        description: a.provider + " model instance",
+        createdAt: a.created_at,
       }));
     }),
     byId: publicQuery
@@ -48,6 +50,8 @@ export const llmFarmRouter = createRouter({
           latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
           performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
           cookies: a.cookies,
+          description: a.provider + " model instance",
+          createdAt: a.created_at,
         };
       }),
   }),
@@ -71,6 +75,8 @@ export const llmFarmRouter = createRouter({
           latency: Number((a.metrics?.avg_latency || 0).toFixed(3)),
           performanceScore: Number((a.metrics?.performance_score || 0).toFixed(3)),
           cookies: a.cookies,
+          description: a.provider + " model instance",
+          createdAt: a.created_at,
         };
 
         const runHistory = a.runs.map((r: any) => ({
@@ -80,7 +86,7 @@ export const llmFarmRouter = createRouter({
           output: r.response,
           tokensUsed: r.tokens_input + r.tokens_output,
           latency: r.latency,
-          timestamp: r.timestamp,
+          timestamp: new Date(r.timestamp).toISOString(),
         }));
 
         const tokenUsage = runHistory.map((r: any) => ({
